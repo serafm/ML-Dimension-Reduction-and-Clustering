@@ -2,6 +2,8 @@ import glob
 import os
 import warnings
 from random import *
+from sklearn.metrics import f1_score
+import pandas as pd
 from PIL import Image
 import numpy as np
 from matplotlib import pyplot as plt
@@ -11,12 +13,29 @@ from sklearn.neural_network import MLPRegressor
 from skmeans import SKMeans
 
 K = []
+K_before = []
 count = 0
 gray_img = []
 categories = dict()
 
 for i in range(10):
-    K.append(randint(1, 4000))
+    n = randint(1, 4000)
+    K.append(n)
+    K_before.append(n)
+
+
+for i in range(len(K)):
+    openDir = os.listdir('train_data/' + str(K[i]))  # dir is your directory path
+    number_files = len(openDir)  # number of images in dir
+    while number_files < 50:
+        K[i] = randint(1, 4000)
+        while K[i] in K_before:
+            K[i] = randint(1, 4000)
+        K_before = K
+        openDir = os.listdir('train_data/' + str(K[i]))  # dir is your directory path
+        number_files = len(openDir)  # number of images in dir
+
+print("DONE: Selected 10 random categories.")
 
 
 # image to gray
@@ -53,96 +72,141 @@ def PCA(X, num_components):
 
     return X_reduced
 
-PCA_reduced_categories100 = dict()
-PCA_reduced_categories50 = dict()
-PCA_reduced_categories25 = dict()
 
-gray_images_pca = dict()
-
+real_labels = []
+col = 0
+gray_images_dataframe = pd.DataFrame()
+print("Converting images from RGB to Gray")
 # Open 50 images of 10 random categories and set their color to gray
 for i in K:
-
-    categories[i] = []  # dictionary includes 50 images arrays of a category(person), Key:category Value: 50 arrays
-    gray_images_pca[i] = []
     openDir = os.listdir('train_data/' + str(i))  # dir is your directory path
     number_files = len(openDir)  # number of images in dir
-
     if number_files >= 50:  # get the directories with 50 images or more so we can choose 50 of them
         for filename in glob.glob('train_data/' + str(i) + '/*.jpg'):  # for each image do:
             if count < 50:  # count to get only 50
-                color_img = np.asarray(Image.open(str(filename))) / 255  # image to array of RGB
-                gray_image = rgb2gray(color_img)
-                categories[i].append(gray_image)  # add the gray image to the dictionary
+                colourImg = Image.open(str(filename))
+                colourPixels = colourImg.convert("RGB")
+                colourArray = np.array(colourPixels.getdata()).reshape(colourImg.size + (3,))
+                gray_img = []
 
-                # For PCA
+                # PCA
                 for x in range(64):
                     for y in range(64):
-                        red = color_img[x][y][0]
-                        green = color_img[x][y][1]
-                        blue = color_img[x][y][2]
+                        red = colourArray[x][y][0]
+                        green = colourArray[x][y][1]
+                        blue = colourArray[x][y][2]
                         gray = 0.299 * red + 0.587 * green + 0.114 * blue
                         gray_img.append(gray)
                 count += 1
-
-                gray_images_pca[i].append(gray_img)
-                gray_img = []
+                real_labels.append(i)
+                gray_images_dataframe[col] = gray_img
+                col += 1
     count = 0
 
+print("DONE: Converted images to gray.")
+
+print(gray_images_dataframe)
+print("SIZE: ", len(gray_images_dataframe))
 
 
-for key in categories:
+"""
+# Load test_data
+print("Loading test images")
+test_data_dataframe = pd.DataFrame()
+i = 1
+for filename in glob.glob('test_data/*.jpg'):
 
-    #PCA_reduced_categories100[key] = []
-    #PCA_reduced_categories50[key] = []
-    #PCA_reduced_categories25[key] = []
+    colourImg = Image.open(str(filename))
+    colourPixels = colourImg.convert("RGB")
+    colourArray = np.array(colourPixels.getdata()).reshape(colourImg.size + (3,))
+    gray_img = []
 
-    images = gray_images_pca[key]
+    for x in range(64):
+        for y in range(64):
+            red = colourArray[x][y][0]
+            green = colourArray[x][y][1]
+            blue = colourArray[x][y][2]
+            gray = 0.299 * red + 0.587 * green + 0.114 * blue
+            gray_img.append(gray)
 
-    reduced_image100 = PCA(images, 100)
-    #reduced_image50 = PCA(images, 50)
-    #reduced_image25 = PCA(images, 25)
+    test_data_dataframe[i] = gray_img
+    i += 1
 
-    PCA_reduced_categories100[key] = reduced_image100
-    #PCA_reduced_categories50[key].append(reduced_image50)
-    #PCA_reduced_categories25[key].append(reduced_image25)
-    break
+print("DONE: Loaded test images.")
+"""
+
+"""
+# Valid Data
+print("Loading valid images")
+valid_dataframe = pd.DataFrame()
+num = 1
+for i in K:
+    for filename in glob.glob('val_data/' + str(i) + '/*.jpg'):
+            colourImg = Image.open(str(filename))
+            colourPixels = colourImg.convert("RGB")
+            colourArray = np.array(colourPixels.getdata()).reshape(colourImg.size + (3,))
+            gray_img = []
+
+            for x in range(64):
+                for y in range(64):
+                    red = colourArray[x][y][0]
+                    green = colourArray[x][y][1]
+                    blue = colourArray[x][y][2]
+                    gray = 0.299 * red + 0.587 * green + 0.114 * blue
+                    gray_img.append(gray)
+
+            valid_dataframe[num] = gray_img
+            num += 1
+    num = 0
+
+print("DONE: Loaded valid images.")
+"""
+
+# (1a) PCA Algorithm
+images = gray_images_dataframe.iloc[:, :]
+images = np.array(images)
 
 
+#print("PCA started.")
+
+# M=100
+#reduced_images100 = PCA(images, 100)
+#reduced_images100 = reduced_images100.transpose()
+
+# M=50
+reduced_images50 = PCA(images.transpose(), 50)
+#reduced_images50 = reduced_images50.transpose()
+print(reduced_images50)
+print(len(reduced_images50))
+
+# M=20
+#reduced_images25 = PCA(images, 25)
+#reduced_images25 = reduced_images25.transpose()
+
+#print("DONE: PCA.")
+
+
+"""
 # (1b) Autoencoder
-M = 100
+M = 50
 d = 4096
+
+print("Autoencoder started.")
 
 autoencoder = MLPRegressor(hidden_layer_sizes=(d, d//4, M, d//4, d),
                            activation='tanh',
                            solver='adam',
                            learning_rate_init=0.0001,
-                           max_iter=20,
+                           max_iter=5,
                            tol=0.0000001,
                            verbose=True)
 
 
-"""
-for key in categories:
-    gray_image = categories[key][7]
-    autoencoder.fit(gray_image, gray_image)
-    x_reconst = autoencoder.predict(gray_image.reshape(-1, 64))
-    break
-"""
+test_images = test_data_dataframe.iloc[:, :]
+autoencoder.fit(images, test_images)
+x_reconst = autoencoder.predict(images)
 
-
-"""
-plt.figure(figsize=(10, 8))
-plt.subplot(1, 2, 1)
-plt.imshow(gray_image.reshape(64, 64), 'gray')
-plt.title('Input Image', fontsize=15)
-plt.xticks([])
-plt.yticks([])
-plt.subplot(1, 2, 2)
-plt.imshow(x_reconst.reshape(64, 64), 'gray')
-plt.title('Reconstructed Image', fontsize=15)
-plt.xticks([])
-plt.yticks([])
-plt.show()
+print("DONE: Autoencoder.")
 """
 
 
@@ -154,30 +218,29 @@ def purity_score(y_true, y_pred):
     # return purity
     return np.sum(np.amax(contingency_matrix, axis=0)) / np.sum(contingency_matrix)
 
-
+"""
 # K-Means Euclidean Distance
-for i in PCA_reduced_categories100:
-    k_means = KMeans(init="random", n_clusters=10, n_init=10, max_iter=300, random_state=42)
-    # fit_images = k_means.fit(PCA_reduced_categories100[i])
-    predicted = k_means.fit_predict(PCA_reduced_categories100[i])
+print("Started K-Means Euclidean Distance")
+kmeans = KMeans(init="random", n_clusters=10, n_init=10, max_iter=300, random_state=42)
+predicted = kmeans.fit_predict(reduced_images50)
 
-    purityScore = purity_score(PCA_reduced_categories100[i], predicted)
-    print("Purity Score: ", purityScore)
-    break
+purityScore = purity_score(real_labels, predicted_labels)
+print("Purity Score: ", purityScore)
+"""
 
-
+"""
 # K-Means Cosine Distance
-"""
-for i in PCA_reduced_categories100:
-    k_means_cosine = SKMeans(10, iters=15)
-    k_means_cosine.fit(PCA_reduced_categories100[i])
+k_means_cosine = SKMeans(10, iters=15)
+predicted = k_means_cosine.fit(reduced_images50)
+print(predicted)
+print(len(predicted))
+purityScore = purity_score(labels, predicted)
+print("Purity Score: ", purityScore)
 """
 
 
-"""
 # (2b) agglomerative hierarchical clustering
-for i in PCA_reduced_categories100:
-    agglomerative_hierarchical_clustering = AgglomerativeClustering(n_clusters=10, affinity='euclidean', linkage='ward')
-    agglomerative_hierarchical_clustering.fit(PCA_reduced_categories100[i])
-    labels = agglomerative_hierarchical_clustering.labels_
-"""
+agglomerative_hierarchical_clustering = AgglomerativeClustering(n_clusters=10, affinity='euclidean', linkage='ward')
+agglomerative_hierarchical_clustering.fit_predict(reduced_images50)
+labels = agglomerative_hierarchical_clustering.labels_
+print(labels)
